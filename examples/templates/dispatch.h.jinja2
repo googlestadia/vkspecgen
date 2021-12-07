@@ -1,0 +1,53 @@
+{#
+ Copyright 2021 Google Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+#}
+
+{# Generate base layer boilerplate
+
+Parameters:
+layer_prefix            name used to prefix layer specfic entry points
+
+#}
+#pragma once
+
+#include <vulkan/vulkan.h>
+#include <vulkan/vk_layer.h>
+
+namespace {{ layer_prefix }} {
+
+struct InstanceDispatchTable {
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for cmd_name, cmd in platform.commands.items() if cmd.is_instance -%}
+    PFN_{{cmd_name}} {{cmd_name[2:]}};
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+};
+
+struct DeviceDispatchTable {
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for cmd_name, cmd in platform.commands.items() if not cmd.is_instance -%}
+    PFN_{{cmd_name}} {{cmd_name[2:]}};
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+};
+
+void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa, InstanceDispatchTable *dt);
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt);
+
+} // namespace {{ layer_prefix }}

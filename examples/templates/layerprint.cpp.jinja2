@@ -1,0 +1,323 @@
+{#
+ Copyright 2021 Google Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+#}
+
+{% import 'vulkan_macros.jinja2' as vulkan %}
+
+#include <iostream>
+#include <streambuf>
+#include <vulkan/vulkan.h>
+
+class ScopedOstream : public std::streambuf
+{
+public:
+    explicit ScopedOstream(std::ostream &os, int indent = 4):
+        os_(&os),
+        sb_(os_->rdbuf()),
+        line_start_(true),
+        indent_(indent)
+    {
+        os_->rdbuf(this);
+    }
+
+    virtual ~ScopedOstream()
+    {
+        os_->rdbuf(sb_);
+    }
+
+protected:
+    virtual int overflow(int ch) {
+        if (line_start_ && ch != '\n'){
+            for (int i = 0; i < indent_; ++i) {
+                sb_->sputc(' ');
+            }
+        }
+
+        line_start_ = '\n' == ch;
+        return sb_->sputc(ch);
+    }
+
+private:
+    std::ostream *os_;
+    std::streambuf *sb_;
+    bool line_start_;
+    int indent_;
+};
+
+struct VkStruct {
+    VkStructureType sType;
+    void *pNext;
+};
+
+
+// Define generic struct printer.
+std::ostream & PrintVkStruct(std::ostream & os, const VkStruct *pStruct);
+
+// Print out a pNext chain
+std::ostream & PrintNextPtr(std::ostream & os, const void *pNext) {
+    if (pNext == nullptr) {
+        os << "(null)";
+        return os;
+    }
+
+    const VkStruct *pStruct = reinterpret_cast<const VkStruct *>(pNext);
+    PrintVkStruct(os, pStruct);
+
+    return PrintNextPtr(os, pStruct->pNext);
+}
+
+{# Define a Enum-To-String function. #}
+{% for enum in enums -%}
+const char *{{enum.name}}ToString({{enum.name}} e) {
+switch (e) {
+    {% for v in enum.unique_values() -%}
+    case {{ v }}: return "{{ v }}";
+    {% endfor -%}
+    default: return "Unknown {{ enum.name }}";
+}
+
+}
+
+{# ostream operators for Enums #}
+std::ostream & operator << (std::ostream & os, const {{enum.name}} &t) {
+    os << {{enum.name}}ToString(t);
+    return os;
+}
+
+{% endfor %}
+
+{# Set #}
+{% set custom_structure_printers = ['VkWriteDescriptorSet'] %}
+
+{%- macro array_length(p, obj) -%}
+    {% if isinstance(p.type, FixedArray) -%}{{p.type.length}}
+    {% else %}
+        {{ p.type.length_expr(obj) }}
+    {% endif %}
+{%- endmacro -%}
+
+{# Macro to print the members fo a Struct #}
+{% macro print_member(p, obj=None) -%}
+    {%- set prefix -%}
+        {%- if obj -%}
+            {{obj}}.
+        {%- endif -%}
+    {%- endset -%}
+    os << "{{ p.name }}: ";
+    // {{ p.name }} -> {{ p.__class__.__name__ }}
+    {% if p.type.name == 'char' and (isinstance(p.type, FixedArray) or isinstance(p.type, DynamicArray)) -%}
+        // string
+        os << {{prefix}}{{ p.name }} << std::endl;
+    {% elif isinstance(p.type, FixedArray) or isinstance(p.type, DynamicArray)-%}
+        {%- if p.type.base_type.name == 'void' -%}
+        {
+            os << std::hex;
+            os << std::endl;
+            const uint8_t *p = (const uint8_t *){{prefix}}{{ p.name }};
+            for (uint32_t i = 0; i < {{ array_length(p, obj) }}; ++i) {
+                os << p[i] << ' ';
+                if (i && (i % 16 == 0)) os << std::endl;
+            }
+            os << std::dec;
+        }
+        {%- else -%}
+        for (uint32_t i = 0; i < {{ array_length(p, obj) }}; ++i) {
+            os << {{prefix}}{{ p.name }}[i] << std::endl;
+        }
+        {%- endif -%}
+    {% elif isinstance(p.type, NextPtr) %}
+        // pNext
+        PrintNextPtr(os, {{prefix}}{{p.name}});
+        os << std::endl;
+    {% elif isinstance(p, Pointer) and p.type.base_type.name == 'void' %}
+        // void
+        os << std::endl;
+    {% elif isinstance(p, Pointer) -%}
+        os << *{{prefix}}{{p.name}} << std::endl;
+    {% else -%}
+        os << {{prefix}}{{p.name}} << std::endl;
+    {%- endif %}
+{% endmacro -%}
+
+{# pre-declare ostream operators #}
+// Forward declare all ostream operators.
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for type in platform_structs[platform.name] -%}
+{% if type.name not in custom_structure_printers -%}
+std::ostream & operator << (std::ostream & os, const {{type.name}} &t);
+{%- endif %}
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+
+{# ostream operators for each struct #}
+// Define all ostream operators.
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for type in platform_structs[platform.name] -%}
+{% if type.name not in custom_structure_printers -%}
+
+std::ostream & operator << (std::ostream & os, const {{type.name}} &t) {
+    os << std::endl << "STRUCT {{type.name}}" << std::endl;
+    ScopedOstream sos(os);
+    {% for p in type.members -%}
+        {%- if p.is_optional and (isinstance(p, Pointer) or isinstance(p.type, DynamicArray)) -%}
+        if (t.{{p.name}}) {
+        {%-endif-%}
+        {{ print_member(p, 't') }}
+        {%- if p.is_optional and (isinstance(p, Pointer) or isinstance(p.type, DynamicArray)) -%}
+        }
+        {%endif-%}
+    {%- endfor %}
+    return os;
+}
+
+{% endif %}
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+
+{# Custom printers #}
+
+{#  VkWriteDescriptorSet uses a custom print function due to how the descriptor
+    type interacts with the pImageInfo/pBufferInfo/pTexelBufferView arrays.
+ #}
+std::ostream &operator<<(std::ostream &os, const VkWriteDescriptorSet &t) {
+  os << "STRUCT VkWriteDescriptorSet" << std::endl;
+  ScopedOstream sos(os);
+  os << "sType: ";
+  os << t.sType << std::endl;
+
+  os << "pNext: ";
+  // void
+
+  os << "dstSet: ";
+  os << t.dstSet << std::endl;
+
+  os << "dstBinding: ";
+  os << t.dstBinding << std::endl;
+
+  os << "dstArrayElement: ";
+  os << t.dstArrayElement << std::endl;
+
+  os << "descriptorCount: ";
+  os << t.descriptorCount << std::endl;
+
+  os << "descriptorType: ";
+  os << t.descriptorType << std::endl;
+
+  switch (t.descriptorType){
+    case VK_DESCRIPTOR_TYPE_SAMPLER:
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+      os << "pImageInfo: ";
+      for (uint32_t i = 0; i < t.descriptorCount; ++i) {
+        os << t.pImageInfo[i] << std::endl;
+      }
+      break;
+
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+      os << "pTexelBufferView: ";
+      for (uint32_t i = 0; i < t.descriptorCount; ++i) {
+        os << t.pTexelBufferView[i] << std::endl;
+      }
+      break;
+
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+      os << "pBufferInfo: ";
+      for (uint32_t i = 0; i < t.descriptorCount; ++i) {
+        os << t.pBufferInfo[i] << std::endl;
+      }
+      break;
+
+    default:
+      os << "Unknown Descriptor Type: " << t.descriptorType << std::endl;
+  }
+
+  return os;
+}
+
+{# Generic struct printer for pNext chain printing #}
+
+//  Print out a VkStruct
+std::ostream & PrintVkStruct(std::ostream & os, const VkStruct *pStruct) {
+    switch (pStruct->sType) {
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for type in platform_structs[platform.name] -%}
+    {%- if type.members|length > 0 and type.members[0].type.name == 'VkStructureType' -%}
+        {%- for stype in type.members[0].values -%}
+    case {{stype}}:
+        {%- endfor -%}
+        os << *reinterpret_cast<const {{type.name}} *>(pStruct); break;
+    {%- endif -%}
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+    default: break;
+    }
+
+    return os;
+}
+
+
+
+{# Handle type modifiers #}
+{%- macro print_parameter(p, type) -%}
+  {%- if isinstance(type, Pointer) -%}*{{ print_parameter(p, type.base_type) }}
+  {%- elif isinstance(type, FixedArray) -%} "{{p.name}}" {# {{ print_parameter(p, type.base_type) }}[{{p.length}}] #}
+  {%- elif isinstance(type, DynamicArray) -%} "{{p.name}}" {# {{ print_parameter(p, type.base_type) }}[{{p.length}}] #}
+  {%- else -%}
+    {%- if isinstance(type, TypeModifier) -%}{{ print_parameter(p, type.base_type) }}{%- else -%}{{ p.name }}{%-endif-%}
+  {%- endif -%}
+{%- endmacro -%}
+
+// Declare our layer's implemetation functions.
+namespace {{ layer_prefix }} {
+
+{% for platform in registry.platforms.values() %}
+{% if platform.macro != '' %}#ifdef {{ platform.macro }} {% endif %}
+{% for cmd_name, cmd in platform.commands.items() -%}
+{{cmd.return_type.name}} {{cmd_name[2:]}}(PFN_{{cmd_name}} pfn, {{ vulkan.command_parameters_prototype(cmd) }}) {
+    {%- if cmd.return_type.name != 'void' -%}
+    auto result =
+    {%- endif -%}
+    pfn({{ vulkan.command_parameters(cmd) }});
+
+    auto &os = std::cout;
+    os << "COMMAND {{cmd_name}}" << std::endl;
+    ScopedOstream sos(os);
+
+    {% for p in cmd.parameters -%}
+        {%- if p.is_optional -%}if ({{p.name}}) { {%- endif -%}
+        {{print_member(p)}}
+        {%- if p.is_optional -%}}{%- endif -%}
+    {% endfor -%}
+
+    {%- if cmd.return_type.name != 'void' -%}return result;{%-endif-%}
+}
+
+{% endfor %}
+{% if platform.macro != '' %}#endif // {{ platform.macro }}{% endif %}
+{% endfor %}
+
+} // namespace {{ layer_prefix }}

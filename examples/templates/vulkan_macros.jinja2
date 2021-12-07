@@ -1,0 +1,51 @@
+{#
+ Copyright 2021 Google Inc.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+#}
+
+{#- Shared macros for working with Vulkan layers -#}
+
+{# Handle type modifiers #}
+{%- macro cpp_type(p) -%}
+  {%- if isinstance(p, Pointer) -%}{{ cpp_type(p.base_type) }}*
+  {%- elif isinstance(p, FixedArray) -%}{{ cpp_type(p.base_type) }}
+  {%- elif isinstance(p, DynamicArray) -%}{{ cpp_type(p.base_type) }}*
+  {%- else -%}
+    {%- if 'string' == p.name -%}char *
+    {%- else -%} {{ p.name }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Returns the fully qualified C type name of member/parameter #}
+{%- macro cpp_field_type(p) -%}
+  {%- if p.type.is_const -%}const {%endif-%}
+  {{ cpp_type(p.type) }}
+{%- endmacro -%}
+
+{# Returns post-name attributes for parameters/members #}
+{%- macro cpp_field_type_post(p) -%}
+  {%- if isinstance(p.type, FixedArray) -%}[{{p.type.length}}]
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Returns the commands parameters as the function prototype #}
+{%- macro command_parameters_prototype(cmd) -%}
+{% for p in cmd.parameters -%}{{cpp_field_type(p)}} {{p.name}}{{cpp_field_type_post(p)}}{% if not loop.last %}, {% endif %}{% endfor %}
+{%- endmacro -%}
+
+{# Returns the commands parameters #}
+{%- macro command_parameters(cmd) -%}
+{% for p in cmd.parameters -%}{{p.name}}{% if not loop.last %}, {% endif %}{% endfor %}
+{%- endmacro -%}
