@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import xml.etree.ElementTree as ET
 import os
 import sys
 
@@ -159,7 +160,8 @@ def TestParser(registry_file):
 
   # EnumVal comment check
   ot = r.types['VkSwapchainCreateFlagBitsKHR']
-  assert ot.values['VK_SWAPCHAIN_CREATE_PROTECTED_BIT_KHR'].comment == 'Swapchain is protected'
+  assert ot.values[
+      'VK_SWAPCHAIN_CREATE_PROTECTED_BIT_KHR'].comment == 'Swapchain is protected'
 
   # Constants check
   assert r.constants['VK_MAX_PHYSICAL_DEVICE_NAME_SIZE'].value == 256
@@ -393,7 +395,80 @@ def TestLengthExpr(registry_file):
   m = t.find_member('pVersionData')
   assert '2*VK_UUID_SIZE' == m.type.length_expr('my_obj')
 
-registry_file=sys.argv[1] if len(sys.argv) > 1 else 'vk.xml'
+
+def TestXmlNodes(registry_file):
+  r = Registry(registry_file, platforms=['', 'ggp'])
+
+  # Every type must have an xml node unless it's a string or a type alias
+  for t in r.types.values():
+    if t.name == 'string' or isinstance(t, TypeAlias):
+      assert t.xml_node is None, t
+    else:
+      assert isinstance(t.xml_node, ET.Element), t
+
+  def check_obj_attr(obj, expected_class, attr_name, expected_attr):
+    assert isinstance(obj, expected_class)
+    actual_attr = obj.xml_node.attrib[attr_name]
+    assert actual_attr == expected_attr, actual_attr
+
+  def check_type_attr(name, expected_class, attr_name, expected_attr):
+    check_obj_attr(r.types[name], expected_class, attr_name, expected_attr)
+
+  # Tests for type classes
+  check_type_attr('uint32_t', BaseType, 'name', 'uint32_t')
+  check_type_attr('VkPhysicalDeviceProperties', Struct, 'returnedonly', 'true')
+  check_type_attr('PFN_vkDebugUtilsMessengerCallbackEXT', FunctionPtr,
+                  'requires', 'VkDebugUtilsMessengerCallbackDataEXT')
+  check_type_attr('VkPhysicalDevice', Handle, 'parent', 'VkInstance')
+  check_type_attr('VkFormat', Enum, 'name', 'VkFormat')
+  check_type_attr('VkQueueFlags', Bitmask, 'requires', 'VkQueueFlagBits')
+  check_type_attr('VK_API_VERSION_1_1', Define, 'requires',
+                  'VK_MAKE_API_VERSION')
+
+  ev = r.types['VkStructureType'].values['VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO']
+  check_obj_attr(ev, EnumValue, 'value', '3')
+
+  field = r.types['VkBaseInStructure'].find_member('pNext')
+  check_obj_attr(field, Field, 'optional', 'true')
+
+  # Type modifiers must have no xml node
+  ptr = r.types['VkBaseInStructure'].find_member('pNext').type
+  assert isinstance(ptr, TypeModifier)
+  assert ptr.xml_node == None
+
+  # Every command must have an xml node
+  for c in r.commands.values():
+    assert isinstance(c.xml_node, ET.Element), c
+
+  check_obj_attr(r.commands['vkCreateInstance'], Command, 'successcodes',
+                 'VK_SUCCESS')
+
+  # Every constant must have an xml node unless it's a type alias
+  for c in r.constants.values():
+    if isinstance(c, TypeAlias):
+      assert c.xml_node is None, c
+    else:
+      assert isinstance(c.xml_node, ET.Element), c
+
+  check_obj_attr(r.constants['VK_UUID_SIZE'], EnumValue, 'value', '16')
+
+  # Every extension must have an xml node
+  for e in r.extensions.values():
+    assert isinstance(e.xml_node, ET.Element), e
+
+  check_obj_attr(r.extensions['VK_KHR_surface'], Extension, 'author', 'KHR')
+
+  # Every platform must have an xml node unless it's a default platform
+  for p in r.platforms.values():
+    if p.name == '':
+      assert p.xml_node is None
+    else:
+      assert isinstance(p.xml_node, ET.Element), p
+
+  check_obj_attr(r.platforms['ggp'], Platform, 'protect', 'VK_USE_PLATFORM_GGP')
+
+
+registry_file = sys.argv[1] if len(sys.argv) > 1 else 'vk.xml'
 TestParser(registry_file)
 TestAliases(registry_file)
 TestFiltering(registry_file)
@@ -401,3 +476,4 @@ TestEnumFiltering(registry_file)
 TestStructFiltering(registry_file)
 TestPlatforms(registry_file)
 TestLengthExpr(registry_file)
+TestXmlNodes(registry_file)

@@ -26,9 +26,10 @@ from typing import Optional
 # Base Type class.
 class Type:
 
-  def __init__(self, name):
+  def __init__(self, name, xml_node):
     self._name = name
     self.extensions = []
+    self.xml_node = xml_node
 
   @property
   def name(self):
@@ -45,7 +46,7 @@ class Type:
 class TypeRef(Type):
 
   def __init__(self, name):
-    super().__init__(name)
+    super().__init__(name, None)
     self.ref = name
 
 
@@ -54,7 +55,7 @@ class TypeRef(Type):
 class TypeAlias(Type):
 
   def __init__(self, name, alias):
-    super().__init__(name)
+    super().__init__(name, None)
     self.alias = alias
 
   # Returns the aliased type, recurses as needed.
@@ -76,15 +77,15 @@ class TypeAlias(Type):
 # Base C/C++ types such as unit32_t, float, etc. belong here.
 class BaseType(Type):
 
-  def __init__(self, name):
-    super().__init__(name)
+  def __init__(self, name, xml_node):
+    super().__init__(name, xml_node)
 
 
 # FunctionPtr represent function pointers.
 class FunctionPtr(Type):
 
   def __init__(self, registry, te):
-    super().__init__(te.find('name').text)
+    super().__init__(te.find('name').text, te)
     # TODO parse the parameters for types and names.
     # They are obnoxiously a different schema than command parameters.
     self.parameters = []
@@ -95,7 +96,7 @@ class FunctionPtr(Type):
 class Handle(Type):
   # Initialize from a type element node.
   def __init__(self, registry, te):
-    super().__init__(te.find('name').text)
+    super().__init__(te.find('name').text, te)
     self.is_dispatchable = te.find('type').text == 'VK_DEFINE_HANDLE'
     self.parent = TypeRef(te.get('parent', ''))
 
@@ -118,8 +119,8 @@ class Handle(Type):
 # Represents an enum value.
 class EnumValue(Type):
 
-  def __init__(self, name, value):
-    super().__init__(name)
+  def __init__(self, name, value, xml_node):
+    super().__init__(name, xml_node)
     self.value = value
     self.comment = None
 
@@ -139,10 +140,10 @@ class Enum(Type):
     self.bitwidth = 32
 
     if te is None:
-      super().__init__(name)
+      super().__init__(name, None)
       return
 
-    super().__init__(te.get('name'))
+    super().__init__(te.get('name'), te)
 
     if te.get('bitwidth'):
       self.bitwidth = int(te.get('bitwidth'))
@@ -175,7 +176,7 @@ class Enum(Type):
             ev = int(str_v, base=10)
       except ValueError:
         pass
-      self.values[en] = EnumValue(en, ev)
+      self.values[en] = EnumValue(en, ev, ee)
       if ee.get('comment') is not None:
         self.values[en].comment = ee.get('comment')
 
@@ -199,7 +200,7 @@ class Enum(Type):
 class Bitmask(Type):
 
   def __init__(self, registry, te):
-    super().__init__(te.find('name').text)
+    super().__init__(te.find('name').text, te)
     self.type = te.find('type').text
 
     # Not all bitmasks have enums, often because they have no defined
@@ -213,13 +214,14 @@ class Bitmask(Type):
 # A Struct member or Command parameter
 class Field:
 
-  def __init__(self, name, type):
+  def __init__(self, name, type, xml_node):
     self.name = name
     self.type = type
     self.is_optional = False
     self.is_output = False
     self.bit_size = None
     self.values = []  # list of allowed values
+    self.xml_node = xml_node
 
   def __str__(self):
     return self.name
@@ -230,7 +232,7 @@ class Field:
 class TypeModifier(Type):
 
   def __init__(self, t):
-    super().__init__(t.name)
+    super().__init__(t.name, None)
     self.base_type = t
     self.is_const = False
 
@@ -324,6 +326,7 @@ class FixedArray(TypeModifier):
 class Platform:
 
   def __init__(self, registry, pe):
+    self.xml_node = pe
     if pe is not None:
       self.name = pe.get('name')
       self.macro = pe.get('protect')
@@ -395,7 +398,7 @@ def parse_enum_extend(registry, ee, extnumber):
     offset = int(ee.get('offset'))
     value = 1000000000 + (extnumber - 1) * 1000 + offset
 
-  ev = EnumValue(name, value)
+  ev = EnumValue(name, value, ee)
   if ee.get('comment') is not None:
     ev.comment = ee.get('comment')
   enum.values[ev.name] = ev
@@ -501,7 +504,7 @@ def parse_parameter_or_member(registry, me, parent):
       t.is_const = ptr.is_const
 
   # Create the actual field
-  f = Field(name, t)
+  f = Field(name, t, me)
 
   # Some struct members have allowed values.
   f.values = [x for x in me.get("values", "").split(',') if x]
@@ -524,7 +527,7 @@ def parse_parameter_or_member(registry, me, parent):
 class Struct(Type):
   # Given a type element create the approproate struct type.
   def __init__(self, registry, te):
-    super().__init__(te.attrib['name'])
+    super().__init__(te.attrib['name'], te)
     self.is_union = False
     self.members = [
         parse_parameter_or_member(registry, me, self)
@@ -558,6 +561,7 @@ class Command:
     else:
       self.successcodes = []
     self.extensions = []
+    self.xml_node = ce
 
   def find_parameter(self, name: str) -> Optional[Field]:
     for p in self.parameters:
@@ -585,6 +589,7 @@ class Extension:
 
     self.types = [t.get('name') for t in en.findall('require/type')]
     self.commands = [t.get('name') for t in en.findall('require/command')]
+    self.xml_node = en
 
     # We tag types and commands to extensions for filtering.
     for t in self.types:
@@ -676,11 +681,11 @@ class Define(Type):
 
   def __init__(self, registry, te):
     if 'name' in te.attrib:
-      super().__init__(te.attrib['name'])
+      super().__init__(te.attrib['name'], te)
       self.tail = None
     else:
       name = te.find('name')
-      super().__init__(name.text)
+      super().__init__(name.text, te)
       self.tail = name.tail
     self.text = te.text
 
@@ -765,7 +770,7 @@ class Registry:
 
   def __parse_basetypes(self, root):
     # Add some special types.
-    self.types['string'] = BaseType('string')
+    self.types['string'] = BaseType('string', None)
 
     # Read in all the basetype types as BaseType types
     for te in root.findall("types/type"):
@@ -776,11 +781,11 @@ class Registry:
           if tte is not None:
             self.types[name] = TypeAlias(name, TypeRef(tte.text))
           else:
-            self.types[name] = BaseType(name)
+            self.types[name] = BaseType(name, te)
       else:
         # Catch the non-base type types.
         name = te.get('name')
-        self.types[name] = BaseType(name)
+        self.types[name] = BaseType(name, te)
 
   def __parse_enums(self, root):
     # Parse all enums.
@@ -1076,7 +1081,7 @@ def resolve_aliases(aliased: dict, resolve_base_type_aliases: bool = False):
 
 
 # Returns a Jinja2 Environment initialized with vkapi types and some
-# functions useful for working with the Registery in Jinja2
+# functions useful for working with the Registry in Jinja2
 def JinjaEnvironment(registry, *args, **kwargs):
   env = jinja2.Environment(*args, **kwargs)
 
