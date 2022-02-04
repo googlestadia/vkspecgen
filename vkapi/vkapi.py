@@ -587,6 +587,13 @@ class Extension:
     self.requires = [x for x in en.get('requires', '').split(',') if x]
     self.specialuse = [x for x in en.get('specialuse', '').split(',') if x]
 
+    # Read extension name and spec version enums.
+    for ee in [t.get('name') for t in en.findall('require/enum[@value]')]:
+      if ee.endswith('_EXTENSION_NAME'):
+        self.name_enum = ee
+      elif ee.endswith('_SPEC_VERSION'):
+        self.spec_version_enum = ee
+
     self.types = [t.get('name') for t in en.findall('require/type')]
     self.commands = [t.get('name') for t in en.findall('require/command')]
     self.xml_node = en
