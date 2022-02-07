@@ -467,6 +467,13 @@ def TestXmlNodes(registry_file):
 
   check_obj_attr(r.platforms['ggp'], Platform, 'protect', 'VK_USE_PLATFORM_GGP')
 
+def TestExtensionEnums(registry_file):
+  r = Registry(registry_file)
+  p = r.platforms['']
+  extname = 'VK_KHR_get_physical_device_properties2'
+  assert extname in p.extensions
+  assert p.extensions[extname].name_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME'
+  assert p.extensions[extname].spec_version_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_SPEC_VERSION'
 
 registry_file = sys.argv[1] if len(sys.argv) > 1 else 'vk.xml'
 TestParser(registry_file)
@@ -477,3 +484,4 @@ TestStructFiltering(registry_file)
 TestPlatforms(registry_file)
 TestLengthExpr(registry_file)
 TestXmlNodes(registry_file)
+TestExtensionEnums(registry_file)
