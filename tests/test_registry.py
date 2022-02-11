@@ -233,6 +233,10 @@ def TestParser(registry_file):
   assert 'vkCreateDisplayModeKHR' not in r3.commands
   assert 'vkCreateDisplayModeKHR' in r.commands
 
+  assert r.commands["vkCmdDrawIndexedIndirectCount"].feature == "VK_VERSION_1_2"
+  assert r.commands["vkCmdDraw"].feature == "VK_VERSION_1_0"
+  assert r.commands["vkGetSwapchainImagesKHR"].feature is None
+
 
 def TestAliases(registry_file):
   r = Registry(registry_file)
@@ -467,13 +471,17 @@ def TestXmlNodes(registry_file):
 
   check_obj_attr(r.platforms['ggp'], Platform, 'protect', 'VK_USE_PLATFORM_GGP')
 
+
 def TestExtensionEnums(registry_file):
   r = Registry(registry_file)
   p = r.platforms['']
   extname = 'VK_KHR_get_physical_device_properties2'
   assert extname in p.extensions
-  assert p.extensions[extname].name_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME'
-  assert p.extensions[extname].spec_version_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_SPEC_VERSION'
+  assert p.extensions[
+      extname].name_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME'
+  assert p.extensions[
+      extname].spec_version_enum == 'VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_SPEC_VERSION'
+
 
 registry_file = sys.argv[1] if len(sys.argv) > 1 else 'vk.xml'
 TestParser(registry_file)

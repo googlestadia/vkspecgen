@@ -561,6 +561,7 @@ class Command:
     else:
       self.successcodes = []
     self.extensions = []
+    self.feature = None
     self.xml_node = ce
 
   def find_parameter(self, name: str) -> Optional[Field]:
@@ -932,6 +933,14 @@ class Registry:
     # the promoted values are defined.
     for ee in root.findall('feature/require/enum[@extends]'):
       ev = parse_enum_extend(self, ee, int(ee.get('extnumber', '0')))
+
+    # Set the Vulkan "feature" for each command (i.e. the Vulkan version where
+    # the command was added to Vulkan Core)
+    for f in root.findall('feature'):
+      v = f.get('name')
+      for c in f.findall('require/command'):
+        name = c.get('name')
+        self.commands[name].feature = v
 
     # At this point in parsing all types should be defined, we can
     # now resolve enum value aliases to point to the actual type.
