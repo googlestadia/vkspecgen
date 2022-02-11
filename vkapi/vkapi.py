@@ -560,6 +560,11 @@ class Command:
       self.successcodes = successcodes.split(',')
     else:
       self.successcodes = []
+    errorcodes = ce.get('errorcodes')
+    if errorcodes is not None:
+      self.errorcodes = errorcodes.split(',')
+    else:
+      self.errorcodes = []
     self.extensions = []
     self.feature = None
     self.xml_node = ce

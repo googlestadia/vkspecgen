@@ -15,6 +15,7 @@
 import xml.etree.ElementTree as ET
 import os
 import sys
+from collections import Counter
 
 # Import vkapi from parent directory
 currentdir = os.path.dirname(os.path.realpath(__file__))
@@ -156,7 +157,7 @@ def TestParser(registry_file):
 
   # Successcodes check
   gfs = r.commands['vkGetFenceStatus']
-  assert tuple(gfs.successcodes) == ('VK_SUCCESS', 'VK_NOT_READY')
+  assert Counter(gfs.successcodes) == Counter(['VK_SUCCESS', 'VK_NOT_READY'])
 
   # EnumVal comment check
   ot = r.types['VkSwapchainCreateFlagBitsKHR']
@@ -444,8 +445,11 @@ def TestXmlNodes(registry_file):
   for c in r.commands.values():
     assert isinstance(c.xml_node, ET.Element), c
 
-  check_obj_attr(r.commands['vkCreateInstance'], Command, 'successcodes',
-                 'VK_SUCCESS')
+  assert Counter(r.commands['vkCreateInstance'].successcodes) == Counter(
+      ['VK_SUCCESS'])
+  assert Counter(
+      r.commands['vkEnumerateDeviceLayerProperties'].errorcodes) == Counter(
+          ['VK_ERROR_OUT_OF_HOST_MEMORY', 'VK_ERROR_OUT_OF_DEVICE_MEMORY'])
 
   # Every constant must have an xml node unless it's a type alias
   for c in r.constants.values():
