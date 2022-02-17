@@ -24,8 +24,8 @@ import os
 import sys
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
+vkspecgendir = os.path.dirname(os.path.dirname(currentdir))
+sys.path.append(vkspecgendir)
 
 import vkapi  # noqa
 
@@ -86,7 +86,8 @@ types = referenced_types(registry.commands.values())
 
 # Create a Jinja2 templating environment
 env = vkapi.JinjaEnvironment(
-    registry, loader=jinja2.FileSystemLoader(searchpath='examples/templates'))
+    registry,
+    loader=jinja2.FileSystemLoader(searchpath=f'{currentdir}/templates'))
 
 platform_structs = {
     k: [t for t in v.types.values() if isinstance(t, vkapi.Struct)
@@ -99,27 +100,30 @@ parameters = {
     'layer_prefix': 'Printer',
 }
 
-tmp = env.from_string(open('examples/templates/layerprint.cpp.jinja2').read())
+generated_dir = f'{currentdir}/generated'
+templates_dir = f'{currentdir}/templates'
+os.makedirs(generated_dir, exist_ok=True)
+tmp = env.from_string(open(f'{templates_dir}/layerprint.cc.jinja2').read())
 out = tmp.render(parameters)
-with open("print.cc", "w") as text_file:
+with open(f'{generated_dir}/print.cc', 'w') as text_file:
   text_file.write(out)
 
-tmp = env.from_string(open('examples/templates/layer_base.cpp.jinja2').read())
+tmp = env.from_string(open(f'{templates_dir}/layer_base.cc.jinja2').read())
 out = tmp.render(parameters)
-with open("layer_base.cc", "w") as text_file:
+with open(f'{generated_dir}/layer_base.cc', 'w') as text_file:
   text_file.write(out)
 
-tmp = env.from_string(open('examples/templates/dispatch.h.jinja2').read())
+tmp = env.from_string(open(f'{templates_dir}/dispatch.h.jinja2').read())
 out = tmp.render(parameters)
-with open("dispatch.h", "w") as text_file:
+with open(f'{generated_dir}/dispatch.h', 'w') as text_file:
   text_file.write(out)
 
-tmp = env.from_string(open('examples/templates/dispatch.cpp.jinja2').read())
+tmp = env.from_string(open(f'{templates_dir}/dispatch.cc.jinja2').read())
 out = tmp.render(parameters)
-with open("dispatch.cc", "w") as text_file:
+with open(f'{generated_dir}/dispatch.cc', 'w') as text_file:
   text_file.write(out)
 
-os.system("clang-format -i -style=google print.cc")
-os.system("clang-format -i -style=google layer_base.cc")
-os.system("clang-format -i -style=google dispatch.h")
-os.system("clang-format -i -style=google dispatch.cc")
+os.system(f'clang-format -i -style=google {generated_dir}/print.cc')
+os.system(f'clang-format -i -style=google {generated_dir}/layer_base.cc')
+os.system(f'clang-format -i -style=google {generated_dir}/dispatch.h')
+os.system(f'clang-format -i -style=google {generated_dir}/dispatch.cc')

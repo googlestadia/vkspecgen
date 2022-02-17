@@ -14,11 +14,12 @@
 
 import os
 import sys
+import argparse
 
 # Import vkapi from parent directory
 currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
+vkspecgendir = os.path.dirname(os.path.dirname(currentdir))
+sys.path.append(vkspecgendir)
 
 import vkapi  # noqa
 
@@ -50,7 +51,7 @@ c_to_fb = {
 
 # Converts a parameter (or struct member) to a flat buffer entry.
 def parameter_to_flatbuffer(field, ftype):
-  # TODO: Should fixed arrays be listed here? YES?
+  # TODO: Should fixed arrays be listed here?
   if isinstance(ftype, vkapi.DynamicArray):
     return '[' + parameter_to_flatbuffer(field, ftype.base_type) + ']'
 
@@ -184,7 +185,33 @@ def print_command(c):
   print()
 
 
-registry = vkapi.Registry('vk.xml')
+# Main routine - setup Jinja and
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--spec", help="path to the vk.xml spec file")
+parser.add_argument("-p",
+                    "--platform",
+                    help="target platforms for the layer[win32, xcb, ggp, ...]",
+                    nargs='+')
+
+args = parser.parse_args()
+
+specfile = args.spec
+if specfile is None:
+  specfile = 'vk.xml'
+
+if not os.path.exists(specfile):
+  print("Vulkan spec '" + os.path.abspath(specfile) + "' not found.")
+  exit(-1)
+
+print("Loading Vulkan spec '" + os.path.abspath(specfile) + "'.")
+
+# Handle multiple platforms but always handle core.
+platforms = ['']
+if args.platform is not None:
+  platforms.extend(args.platform)
+
+print(f'Platforms: {platforms}')
+registry = vkapi.Registry(specfile, platforms=platforms)
 
 print("namespace vcr;")
 print()
