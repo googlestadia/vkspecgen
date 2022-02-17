@@ -22,6 +22,12 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+# constants
+VULKAN_ALL_PLATFORMS = 'VULKAN_ALL_PLATFORMS'
+VULKAN_ALL_AUTHORS = 'VULKAN_ALL_AUTHORS'
+VULKAN_ALL_SUPPORTED = 'VULKAN_ALL_SUPPORTED'
+VULKAN_ALL_EXTENSIONS = 'VULKAN_ALL_EXTENSIONS'
+
 
 # Base Type class.
 class Type:
@@ -728,11 +734,24 @@ class Registry:
 
     root = ET.parse(registry_file).getroot()
 
+    # Set the default scope to core platform
     if platforms is None:
       platforms = ['']
-      platforms.extend(
-          [p.get('name') for p in root.findall("platforms/platform[@name]")])
+    if authors is None:
+      authors = ['']
+    if supported is None:
+      supported = ['vulkan']
 
+    # Extend the parameters if necessary
+    if VULKAN_ALL_PLATFORMS in platforms:
+      platforms = ['']
+      platforms.extend(
+          [p.get('name') for p in root.findall('platforms/platform[@name]')])
+    if VULKAN_ALL_AUTHORS in authors:
+      authors = ['']
+      authors.extend([p.get('name') for p in root.findall('tags/tag[@name]')])
+    if VULKAN_ALL_SUPPORTED in supported:
+      supported = ['vulkan', 'disabled']
     # Add the core platform here to keep it first in dictionary.
     if '' in platforms:
       self.platforms[''] = None
@@ -741,12 +760,16 @@ class Registry:
 
     if allowed_extensions is None:
       allowed_extensions = set()
+    elif VULKAN_ALL_EXTENSIONS in allowed_extensions:
+      allowed_extensions = set(self.extensions.values())
     else:
       allowed_extensions = set(
           self.extensions[name] for name in allowed_extensions)
 
     if blocked_extensions is None:
       blocked_extensions = set()
+    elif VULKAN_ALL_EXTENSIONS in blocked_extensions:
+      blocked_extensions = set(self.extensions.values())
     else:
       blocked_extensions = set(
           self.extensions[name] for name in blocked_extensions)
@@ -922,8 +945,6 @@ class Registry:
       # We will ignore numbered and reserved extensions
       name = ee.get('name', '')
       if "RESERVED" in name:
-        continue
-      if name.endswith(ee.get('number')):
         continue
 
       ext = Extension(self, ee)

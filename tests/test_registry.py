@@ -362,17 +362,36 @@ def TestPlatforms(registry_file):
   assert 'vkCreateWin32SurfaceKHR' not in r.platforms[''].commands
   assert 'vkCreateWin32SurfaceKHR' in r.platforms['win32'].commands
 
-  # test all platforms and authors
+  # test all platforms, authors and supported
   assert 'xlib_xrandr' not in r.platforms
   assert 'VK_FUCHSIA_imagepipe_surface' not in r.extensions
   assert 'VK_EXT_filter_cubic' not in r.extensions
   assert 'VK_INTEL_shader_integer_functions2' not in r.extensions
-  r = Registry(registry_file, platforms=None, authors=None)
+  r = Registry(registry_file,
+               platforms=[vkapi.VULKAN_ALL_PLATFORMS],
+               authors=[vkapi.VULKAN_ALL_AUTHORS],
+               supported=[vkapi.VULKAN_ALL_SUPPORTED])
   assert 'VK_FUCHSIA_imagepipe_surface' in r.extensions
   assert 'VK_EXT_filter_cubic' in r.extensions
   assert 'VK_INTEL_shader_integer_functions2' in r.extensions
+  assert 'VK_QCOM_extension_173' in r.extensions
   assert 'xlib_xrandr' in r.platforms
   assert 16 == len(r.platforms)
+
+
+def TestExtensions(registry_file):
+  # test allowing all the extensions
+  r = Registry(registry_file, allowed_extensions=[vkapi.VULKAN_ALL_EXTENSIONS])
+  assert 'VK_EXT_debug_utils' in r.extensions
+  assert 'VK_GGP_stream_descriptor_surface' in r.extensions
+  assert 'VK_FUCHSIA_imagepipe_surface' in r.extensions
+  assert 'VK_EXT_filter_cubic' in r.extensions
+  assert 'VK_INTEL_shader_integer_functions2' in r.extensions
+  assert 'VK_QCOM_extension_173' in r.extensions
+
+  # test blocking all the extensions
+  r = Registry(registry_file, blocked_extensions=[vkapi.VULKAN_ALL_EXTENSIONS])
+  assert len(r.extensions) == 0
 
 
 def TestLengthExpr(registry_file):
