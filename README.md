@@ -24,11 +24,17 @@ Please note that VkSpecGen is not an officially supported Google product.
 ## Examples
 
 Multiple examples are provided in `examples` directory.
-The code will be generated in the root folder. You need `python3` to run the examples.
+The code will be generated in the example folder. You need `python3` to run the examples.
+
 You can pass the path to the Vulkan API registry file (`vk.xml`) using `-s` or `--spec`. If the path
 is not provided, the generator scripts expect to find the registry file in the root directory of
 the VkSpecGen.
 You can pass the target platform for the layer using `-p` or `--platform`. The default platform is the core platform. For the list of valid Vulkan platforms please see `<platforms>` node in `vk.xml` file.
+
+Please note that the examples are only provided for learning purposes, and they
+may need improvements to be used in an application of interest.
+Before incorporating the examples into your project, please make sure they correctly
+satisfy your requirements. 
 
 ### Generate Flatbuffers Schema
 
@@ -47,6 +53,20 @@ You can use `CMake` to build the layer from the example folder. However note tha
 for the build to be successful, you need to have the proper version of the
 Vulkan headers installed. The headers should match the version of the `vk.xml`
 that you used to generate the layer.
+
+### Tracking Vulkan Commands
+
+`examples/command_tracker/vk_command_tracker.py` generates the code for
+tracking Vulkan commands. This example is borrowed from the
+[Graphics Flight Recorder](https://github.com/googlestadia/gfr) project.
+GFR is a Vulkan layer to help trackdown and identify the cause of GPU hangs and
+crashes. GFR uses VkSpecGen and Jinja2 templates to generate the layer boilerplate
+code and track the Vulkan API of interest. The generated code includes command
+tracking, command recording and command printing functions for the command buffer
+related API, which is the Vulkan commands in which the first parameter is
+a command buffer. You can find the respective filter defined as a Jinja2 macro
+in `vulkan_macros.jinja2`.
+
 
 ## Test
 
