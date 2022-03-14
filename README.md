@@ -1,8 +1,8 @@
 ## Overview
 
-VkSpecGen is a toolkit for generating code from the Vulkan secification XML.
+VkSpecGen is a toolkit for generating code from the Vulkan specification XML.
 While VkSpecGen can be used by it's own, to generate flatbuffers schema for
-example, it also supports Jinja2 template rendering enging.
+example, it also supports Jinja2 template rendering engine.
 Support for other or custom template rendering engines can be added and to
 VkSpecGen conveniently.
 

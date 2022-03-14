@@ -56,7 +56,7 @@ class TypeRef(Type):
     self.ref = name
 
 
-# TypeAlias calss.
+# TypeAlias class.
 # Use for types that are promoted and now alias
 class TypeAlias(Type):
 
@@ -186,7 +186,7 @@ class Enum(Type):
       if ee.get('comment') is not None:
         self.values[en].comment = ee.get('comment')
 
-  # Returns a {name:int} dictionary of all enum values, resolving alises.
+  # Returns a {name:int} dictionary of all enum values, resolving aliases.
   def get_integer_values(self):
     iv = {}
     for v in self.values.values():
@@ -320,7 +320,7 @@ class DynamicArray(TypeModifier):
     return self.length.replace(length_field_name, length_field_expr)
 
 
-# FixedArray is aixed length array
+# FixedArray is fixed length array
 class FixedArray(TypeModifier):
 
   def __init__(self, t, length):
@@ -328,7 +328,7 @@ class FixedArray(TypeModifier):
     self.length = length
 
 
-# Platform describes a Vulkan plaform: name, #ifdef, types and commands
+# Platform describes a Vulkan platform: name, #ifdef, types and commands
 class Platform:
 
   def __init__(self, registry, pe):
@@ -346,7 +346,7 @@ class Platform:
       # This selects types and commands from non-platform specific extensions.
       self.select_types_and_commands(registry)
 
-      # Finaly we add types and commands without an extension (core)
+      # Finally we add types and commands without an extension (core)
       core_commands = {
           k: v for (k, v) in registry.commands.items() if len(v.extensions) == 0
       }
@@ -380,7 +380,7 @@ class Platform:
 
 # Handles enum value extensions from either ex
 def parse_enum_extend(registry, ee, extnumber):
-  # Get the base enum and exten it's list of values.
+  # Get the base enum and extend it's list of values.
   name = ee.get('name')
   base_enum = ee.get('extends')
   enum = registry.types[base_enum]
@@ -531,7 +531,7 @@ def parse_parameter_or_member(registry, me, parent):
 # Struct
 # Structs represet a 'struct' type from the Vulkan spec.
 class Struct(Type):
-  # Given a type element create the approproate struct type.
+  # Given a type element create the appropriate struct type.
   def __init__(self, registry, te):
     super().__init__(te.attrib['name'], te)
     self.is_union = False
@@ -1055,7 +1055,7 @@ class Registry:
 
     return t
 
-  # Modifies the registy to only have the requestied platform and authors.
+  # Modifies the registry to only have the requestied platform and authors.
   def __filter_registry(self, platforms, extension_authors, supported,
                         allowed_extensions, blocked_extensions):
     filtered_ex = self.__select_extensions(platforms, extension_authors,

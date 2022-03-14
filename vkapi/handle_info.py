@@ -136,7 +136,7 @@ class HandleInfoGlobals:
     """Find info about the handle type created by a command
 
     Returns: A pair (handle_info, handle_create_command). If cmd is not
-      a handle-creation comamnd, both handle_info and handle_create_command
+      a handle-creation command, both handle_info and handle_create_command
       are None
     """
     for p in cmd.parameters:
